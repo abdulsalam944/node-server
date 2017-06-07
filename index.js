@@ -106,11 +106,12 @@ io.on('connection', function(socket){
       
     });
 
+    // Sending disconnect message to client
 
-    //console.log(socket);
-    // var thisuser = socket.id;
-    // var msgToSend = '{"type":"code","msg":"dissconnected","userid":"'+thisuser+'"}';
-    // io.emit('chat message', msgToSend);
+    console.log(socket);
+    var thisuser = socket.id;
+    var msgToSend = '{"type":"code","msg":"dissconnected","userid":"'+thisuser+'"}';
+    io.emit('chat message', msgToSend);
   });
 
   socket.on('chat message', function(msg){
