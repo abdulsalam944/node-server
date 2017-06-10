@@ -182,6 +182,9 @@ io.on('connection', function(socket){
    //socket.emit('joinRoom', 'hello world');
 
    socket.on('allmsg', function(msg){
+
+      console.log('Sending to all user',msg);
+
      io.emit('chat message', msg);
    });
 
@@ -231,6 +234,10 @@ function discard_during_gameplay(userId, sessionId, cardPulled){
                         var dataToSend = {"room":res[0].session_key,"type":"card-discarded","message":"discard done","player":userId,"cardDiscarded":card.card_received,"nextPlayer":nextOfCurPlayer,playerTmp:playersTmp };
                         console.log(dataToSend);
                         io.sockets.emit('chat message', JSON.stringify(dataToSend)); 
+
+
+
+
 
                         // removing discareded card from hand
                         var dataToSend = { form: {room: res[0].session_key, player: userId, card: card.card_received} };
@@ -298,69 +305,126 @@ function discarded(m){ // This function will need to be called after card discar
       connection.query(query,function(err, res){
          if(err) throw err;
 
+
+
          if(res.length){
             console.log('Self dissconnected..'+nextPlayer);
          }else{
-            console.log('Internet gone of this user: '+nextPlayer);
 
-            setTimeout(function(){
+           // check drop count
+            console.log('Check drop counter...');
+            var ajxDataCheckAutoplayedCount = { form: {'action': 'check-drop-type', roomId: room, sessionKey: room, player: nextPlayer}};
+            console.log(ajxDataCheckAutoplayedCount);
+            request.post(apiUrl+'checkDropType.php', ajxDataCheckAutoplayedCount, function (error, response, body) {
+              console.log(response.statusCode, body);
+                if (response.statusCode == 200 && body) {
+                  
+                    if(parseInt(body.trim()) > 0){
 
-                // Auto Playcode start
-                // check if user alredy pulls any card
-                var query = "select * from game_running where session_key = '"+room+"' ";
-                connection.query(query,function(req,res){
+                      //check autoplay count
+                      console.log('Check autoplay counter...');
+                      var ajxDataCheckAutoplayedCount = { form: {'action': 'check-autoplayed-count', roomId: room, sessionKey: room, player: nextPlayer} };
+                      console.log(ajxDataCheckAutoplayedCount);
+                      request.post(apiUrl+'checkAutoPlayedCount.php', ajxDataCheckAutoplayedCount, function (error, response, body) {
+                        console.log(response.statusCode, body);
+                          if (response.statusCode == 200 && body) {
 
-                  //console.log(res);
-                  var dataToSend = { form: {action: 'get-card-from-deck', roomId: res[0].game_id, sessionKey: res[0].session_key} };
-                  console.log(dataToSend);
-  	              request.post(apiUrl+'getThrowCardFromShuffledDeck.php',dataToSend,
-  					      function (error, response, body) {
-        					    	console.log(response.statusCode);
-        					        if (response.statusCode == 200 && body) {
-        					            console.log(body);
-        					            var card = JSON.parse(body.trim());
-        					            console.log(card.card_received);
-        					            if(card.card_received){						            	
+                              if(parseInt(body.trim()) >= 1){
+                                // clear interval and drop on middle this user
+                                var dataToSend = {"room":room,"type":"code","msg":"card-drop-middle","player":nextPlayer};
+                                io.sockets.emit('chat message', JSON.stringify(dataToSend));
+                              }else{
+                                // auto play code will go here ////////////
 
-        					            	//send card pull signal
-        					            	var dataToSend = {"room":res[0].session_key,"type":"card-pulled-show-card","message":"card pulled","player":nextPlayer,"cardPulled":card.card_received};
-        					            	console.log(dataToSend);
-        					            	socket.broadcast.emit('chat message', JSON.stringify(dataToSend));
-        					            	
-        					            	//send card discard signal
-        					            	setTimeout(function(){
+                                var query = " select * from game_running where session_key = '"+room+"'";   
+                                connection.query(query,function(err, res){
+                                   if(err) throw err;
 
-        					            		//getNextPlayer
-        					            		console.log(playersTmp);
-        					            		console.log('Discarded..');
-        					            		var nextOfCurPlayer = findNextPlayer(playersTmp,nextPlayer);
-        					            		var dataToSend = {"room":res[0].session_key,"type":"card-discarded","message":"discard done","player":nextPlayer,"cardDiscarded":card.card_received,"nextPlayer":nextOfCurPlayer,playerTmp:playersTmp };
-        					            		console.log(dataToSend);
-        					            		io.sockets.emit('chat message', JSON.stringify(dataToSend)); 
 
-                                  // removing discareded card from hand
-                                  var dataToSend = { form: {room: res[0].session_key, player: nextPlayer, card: card.card_received} };
-                                  request.post(apiUrl+'removeCardFromHand.php',dataToSend,function(error, response, body){
-                                      console.log(body);
-                                  });
+                                  var dataToSend = { form: {action: 'get-card-from-deck', roomId: res[0].game_id, sessionKey: res[0].session_key} };
+                                  console.log('Internet gone of this user: '+nextPlayer);
+                                  setTimeout(function(){
 
-        					            		discarded(dataToSend);
-        					            		//socket.emit.apply('chat message', JSON.stringify(dataToSend));
-        					            		//socket.emit('chat message', JSON.stringify(dataToSend));
+                                      // Auto Playcode start
+                                      // check if user alredy pulls any card
+                                      var query = "select * from game_running where session_key = '"+room+"' ";
+                                      connection.query(query,function(req,res){
 
-        					            	},5000);
+                                        //console.log(res);
+                                        var dataToSend = { form: {action: 'get-card-from-deck', roomId: res[0].game_id, sessionKey: res[0].session_key} };
+                                        console.log(dataToSend);
+                        	              request.post(apiUrl+'getThrowCardFromShuffledDeck.php',dataToSend,
+                        					      function (error, response, body) {
+                              					    	console.log(response.statusCode);
+                              					        if (response.statusCode == 200 && body) {
+                              					            console.log(body);
+                              					            var card = JSON.parse(body.trim());
+                              					            console.log(card.card_received);
+                              					            if(card.card_received){						            	
 
-        					            }
+                              					            	//send card pull signal
+                              					            	var dataToSend = {"room":res[0].session_key,"type":"card-pulled-show-card","message":"card pulled","player":nextPlayer,"cardPulled":card.card_received};
+                              					            	console.log(dataToSend);
+                              					            	socket.broadcast.emit('chat message', JSON.stringify(dataToSend));
+                              					            	
+                              					            	//send card discard signal
+                              					            	setTimeout(function(){
 
-        					        }else{
-        					          console.log(error, response);
-        					        }        
-        					    }
-        					);
+                              					            		//getNextPlayer
+                              					            		console.log(playersTmp);
+                              					            		console.log('Discarded..');
+                              					            		var nextOfCurPlayer = findNextPlayer(playersTmp,nextPlayer);
+                              					            		var dataToSend = {"room":res[0].session_key,"type":"card-discarded","message":"discard done","player":nextPlayer,"cardDiscarded":card.card_received,"nextPlayer":nextOfCurPlayer,playerTmp:playersTmp };
+                              					            		console.log(dataToSend);
+                              					            		io.sockets.emit('chat message', JSON.stringify(dataToSend)); 
 
-                });
+                                                        // removing discareded card from hand
+                                                        var dataToSend = { form: {room: res[0].session_key, player: nextPlayer, card: card.card_received} };
+                                                        request.post(apiUrl+'removeCardFromHand.php',dataToSend,function(error, response, body){
+                                                            console.log(body);
+                                                        });
 
-            },5000);
+                              					            		discarded(dataToSend);
+                              					            		//socket.emit.apply('chat message', JSON.stringify(dataToSend));
+                              					            		//socket.emit('chat message', JSON.stringify(dataToSend));
+
+                              					            	},5000);
+
+                              					            }
+
+                              					        }else{
+                              					          console.log(error, response);
+                              					        }        
+                              					    }
+                              					);
+
+                                      });
+
+                                  },5000);
+
+                                });
+                                  ////////////
+
+                            }
+
+                          }else{
+                            console.log(error, response);
+                          }
+
+                      });
+
+                    }else if(parseInt(body.trim()) == 0){
+                        // send drop on first function
+                        var dataToSend = {"room":room,"type":"code","msg":"card-drop-first","player":nextPlayer};
+                        io.sockets.emit('chat message', JSON.stringify(dataToSend));
+                    }
+
+
+                }else{
+                  console.log(error, response);
+                }
+
+            });
 
          }
 
